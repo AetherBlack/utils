@@ -37,7 +37,7 @@ class AsmInstruction:
 
             #Print
             print(f"{title} :")
-            print("-" * (len(title) + 2))
+            print("".ljust(len(title) + 2, "-"))
             print(title_content.replace(value2replace, replace2value))
             print()
 
@@ -58,7 +58,7 @@ if res.status_code == 200:
     soup = BeautifulSoup(res.text, "html.parser")
 
     #Get each line
-    text_list = soup.get_text().split("\n")
+    text_list = soup.get_text().splitlines()
 
     #Get instance
     asm = AsmInstruction(res.text, text_list)
