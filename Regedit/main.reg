@@ -1,0 +1,31 @@
+Windows Registry Editor Version 5.00
+
+; This will make it appear when you right click ON a folder
+; The "Icon" line can be removed if you don't want the icon to appear
+[HKEY_CLASSES_ROOT\Directory\shell\windowsterminal]
+@="Open Folder on Windows Terminal"
+[HKEY_CLASSES_ROOT\Directory\shell\windowsterminal\command]
+@="\"C:\\Users\\Yohan\\AppData\\Local\\Microsoft\\WindowsApps\\wt.exe\" -d \"%1\""
+
+; This will make it appear when you right click INSIDE a folder
+; The "Icon" line can be removed if you don't want the icon to appear
+
+; <https://github.com/microsoft/terminal/issues/1918>
+; The default icons that Windows Terminal is using is here: C:\Program Files\WindowsApps\Microsoft.WindowsTerminal_#####
+
+;To get into the WindowsApps folder you will need permission. However, if you do not want to mess with permissions, you can do the following.
+;
+;    Open the Windows Terminal App
+;    Click the drop-down arrow.
+;    alt+click settings -that opens the default .json file
+;    I would recommend opening it up in VS Code
+;    Right click the tab and click "Reveal In File Explorer"
+;    The icons are located in the ProfileIcons
+
+;To use these icons keep the ms-appx:///ProfileIcons/ then just add the icon name and extension. However, to add your own icons to the folder, you will need permission.
+
+[HKEY_CLASSES_ROOT\Directory\Background\shell\windowsterminal]
+@="Open Folder on Windows Terminal"
+"Icon"="\"C:\\Program Files\\WindowsApps\\Microsoft.WindowsTerminal_1.4.3243.0_x64__8wekyb3d8bbwe\\wt.exe\",0"
+[HKEY_CLASSES_ROOT\Directory\Background\shell\windowsterminal\command]
+@="\"C:\\Users\\Yohan\\AppData\\Local\\Microsoft\\WindowsApps\\wt.exe\" -d \"%V\""
