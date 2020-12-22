@@ -7,6 +7,7 @@ from urllib.parse import urlparse
 from OpenSSL import SSL
 
 import requests
+import os
 
 # Static
 METHODS = [
@@ -25,8 +26,8 @@ URL = "http://scratchpads.org/"
 PROXY = "https://127.0.0.1/"
 DOMAIN = urlparse(URL).netloc
 ## Certs
-PRIV_KEY = "certs\\key.pem"
-PUB_KEY = "certs\\cert.pem"
+PRIV_KEY = os.path.join("certs", "key.pem")
+PUB_KEY = os.path.join("certs", "cert.pem")
 
 # Mise en place d'un TLS v1.2 avec certificat HTTPS
 context = SSL.Context(SSL.TLSv1_2_METHOD)
@@ -67,4 +68,4 @@ def main(path):
 
 if __name__ == "__main__":
     context = (PUB_KEY, PRIV_KEY)
-    app.run(host="127.0.0.1", port=8083, debug=True, ssl_context=context)
+    app.run(host="0.0.0.0", port=8083, debug=True, ssl_context=context)
