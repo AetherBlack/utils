@@ -1,6 +1,5 @@
 from flask import Flask
 from flask import request
-from flask import jsonify
 from flask import Response
 
 from urllib.parse import urlparse
@@ -9,7 +8,7 @@ from OpenSSL import SSL
 
 import requests
 
-### Static
+# Static
 METHODS = [
     "GET",
     "HEAD",
@@ -21,21 +20,18 @@ METHODS = [
     "TRACE",
     "PATCH"
     ]
+## URL
 URL = "http://scratchpads.org/"
 PROXY = "https://127.0.0.1/"
-## DEFAULT HEADERS
-USER_AGENT = "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/535.1 (KHTML, like Gecko) Chrome/13.0.782.112 Safari/535.1"
-ACCEPT = "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8"
-ACCEPT_LANGUAGE = "fr,fr-FR;q=0.8,en-US;q=0.5,en;q=0.3"
-ACCEPT_ENCODING = "gzip, deflate, br"
-CONNECTION = "keep-alive"
 DOMAIN = urlparse(URL).netloc
+## Certs
+PRIV_KEY = "certs\\key.pem"
+PUB_KEY = "certs\\cert.pem"
 
-set_headers = lambda request, string : request.headers[string] if string in list(request.headers.keys()) else globals()[string.upper().replace("-", "_")]
-
+# Mise en place d'un TLS v1.2 avec certificat HTTPS
 context = SSL.Context(SSL.TLSv1_2_METHOD)
-context.use_privatekey_file("certs\\server.key")
-context.use_certificate_file("certs\\server.crt")
+context.use_privatekey_file(PRIV_KEY)
+context.use_certificate_file(PUB_KEY)
 
 app = Flask(__name__)
 
@@ -44,42 +40,31 @@ app = Flask(__name__)
 def main(path):
     # Get method for requests
     request_method = getattr(requests, request.method.lower())
+
     # Set headers
-    headers = {
-        "Host": DOMAIN,
-        "User-Agent": set_headers(request, "User-Agent"),
-        "Accept": set_headers(request, "Accept"),
-        "Accept-Language": set_headers(request, "Accept-Language"),
-        "Accept-Encoding": set_headers(request, "Accept-Encoding")
-    }
+    client_headers = dict(request.headers)
+    client_headers["Host"] = DOMAIN
+    client_headers["Referer"] = URL
+
+    # Set data
+    client_data = dict(request.form)
+
     # Launch the Query
-    response = request_method(URL + path, headers=headers)
+    response = request_method(URL + path, headers=client_headers, data=client_data, timeout=10)
 
-    print(response.headers)
-
-    # Make the response with content and header
-    resp = Response(response.text.replace(URL, PROXY))
+    # Make the response with content and header for the file type
+    resp = Response(response.content)
     resp.headers = {
         "Content-Type": response.headers["Content-Type"],
-        "Content-Length": len(response.content)
         }
-
-    return resp
-
-    # 
-    return f"<h1>You requests {path} with method {request.method}</h1>" + response.text.replace(URL, PROXY)
     
-    #return Response(value, mimetype="text/html")
-    headers = {"Content-Type": "text/html",
-                "Content-Encoding": "gzip",
-                "Vary": "Accept-Encoding"}
-    value = gzip.compress(value.encode("iso-8859-1"))
-    resp = app.make_response(value)
-    #resp.mimetype = "text/html"
-    resp.headers = headers
+    # Attribution de cookie si le header est present
+    if "Set-Cookie" in list(response.headers.keys()):
+        resp.headers["Set-Cookie"] = response.headers["Set-Cookie"]
+
     return resp
 
 
 if __name__ == "__main__":
-    context = ("certs\\server.crt", "certs\\server.key")
+    context = (PUB_KEY, PRIV_KEY)
     app.run(host="127.0.0.1", port=8083, debug=True, ssl_context=context)
