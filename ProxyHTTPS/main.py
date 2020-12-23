@@ -32,11 +32,16 @@ PUB_KEY = os.path.join("certs", "cert.pem")
 ## PID File
 PID_FILE = "pid/pidhttps.ini"
 
+set_args = lambda args : "&".join([f"{key}={value}" for key, value in args.items()])
+
 app = Flask(__name__)
 
 @app.route("/", defaults={"path": ""}, methods=METHODS)
 @app.route("/<path:path>", methods=METHODS)
 def main(path):
+    # Make URL
+    _url = URL + path + "?" + set_args(dict(request.args))
+
     # Get method for requests
     request_method = getattr(requests, request.method.lower())
 
@@ -49,14 +54,19 @@ def main(path):
     client_data = dict(request.form)
 
     # Launch the Query
-    response = request_method(URL + path, headers=client_headers, data=client_data, timeout=10)
+    if "Content-Type" in list(client_headers.keys()) and client_headers["Content-Type"].startswith("multipart/form-data"):
+            files = tuple({(key, (None, value)) for key, value in client_data.items()})
+            del client_headers["Content-Type"]
+            response = request_method(_url, headers=client_headers, files=files, timeout=10)
+    else:
+        response = request_method(_url, headers=client_headers, data=client_data, timeout=10)
 
     # Make the response with content and header for the file type
     resp = Response(response.content)
     resp.headers = {
         "Content-Type": response.headers["Content-Type"],
         }
-    
+
     # Attribution de cookie si le header est present
     if "Set-Cookie" in list(response.headers.keys()):
         resp.headers["Set-Cookie"] = response.headers["Set-Cookie"]
