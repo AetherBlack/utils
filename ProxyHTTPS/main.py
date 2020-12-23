@@ -1,12 +1,13 @@
+#!/usr/local/bin/python3.8
+
 from flask import Flask
 from flask import request
 from flask import Response
 
 from urllib.parse import urlparse
 
-from OpenSSL import SSL
-
 import requests
+import ssl
 import os
 
 # Static
@@ -28,16 +29,13 @@ DOMAIN = urlparse(URL).netloc
 ## Certs
 PRIV_KEY = os.path.join("certs", "key.pem")
 PUB_KEY = os.path.join("certs", "cert.pem")
-
-# Mise en place d'un TLS v1.2 avec certificat HTTPS
-context = SSL.Context(SSL.TLSv1_2_METHOD)
-context.use_privatekey_file(PRIV_KEY)
-context.use_certificate_file(PUB_KEY)
+## PID File
+PID_FILE = "pid/pidhttps.ini"
 
 app = Flask(__name__)
 
 @app.route("/", defaults={"path": ""}, methods=METHODS)
-@app.route("/<path:path>")
+@app.route("/<path:path>", methods=METHODS)
 def main(path):
     # Get method for requests
     request_method = getattr(requests, request.method.lower())
@@ -67,5 +65,9 @@ def main(path):
 
 
 if __name__ == "__main__":
-    context = (PUB_KEY, PRIV_KEY)
-    app.run(host="0.0.0.0", port=8083, debug=True, ssl_context=context)
+    with open(PID_FILE, "w") as f:
+        f.write(f"{os.getpid()}\n")
+    # Mise en place d'un TLS v1.2 avec certificat HTTPS
+    context = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
+    context.load_cert_chain(PUB_KEY, PRIV_KEY)
+    app.run(host="0.0.0.0", port=8083, debug=False, ssl_context=context)
