@@ -53,9 +53,24 @@ def main(path):
     # Set data
     client_data = dict(request.form)
 
+    # Set files
+    if len(dict(request.files)):
+        # For each files
+        for key, value in dict(request.files).items():
+            # Check the filename
+            if not len(value.filename):
+                continue
+            # Write into file
+            with open(f"/tmp/{value.filename}", "wb") as f:
+                f.write(value.read())
+            # Add file to the client data
+            client_data[key] = (value.filename, open(f"/tmp/{value.filename}", "rb"), value.content_type)
+
     # Launch the Query
     if "Content-Type" in list(client_headers.keys()) and client_headers["Content-Type"].startswith("multipart/form-data"):
-            files = tuple({(key, (None, value)) for key, value in client_data.items()})
+            # Set info or if file set file
+            files = tuple({(key, (None, value)) if not isinstance(value, tuple) else (key, (value)) for key, value in client_data.items()})
+            # Delete Content-Type to let flask set the good multipart
             del client_headers["Content-Type"]
             response = request_method(_url, headers=client_headers, files=files, timeout=10)
     else:
