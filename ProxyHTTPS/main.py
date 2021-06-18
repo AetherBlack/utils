@@ -51,7 +51,8 @@ def main(path):
     client_headers["Referer"] = URL
 
     # Set data
-    client_data = dict(request.form)
+    #client_data = dict(request.form)
+    client_data = request.form.to_dict(flat=False)
 
     # Set files
     if len(dict(request.files)):
