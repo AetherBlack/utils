@@ -52,7 +52,7 @@ def main(path):
 
     # Set data
     #client_data = dict(request.form)
-    client_data = request.form.to_dict(flat=False)
+    #client_data = request.form.to_dict(flat=False)
 
     # Set files
     if len(dict(request.files)):
@@ -69,12 +69,16 @@ def main(path):
 
     # Launch the Query
     if "Content-Type" in list(client_headers.keys()) and client_headers["Content-Type"].startswith("multipart/form-data"):
+            # Set data
+            client_data = dict(request.form)
             # Set info or if file set file
             files = tuple({(key, (None, value)) if not isinstance(value, tuple) else (key, (value)) for key, value in client_data.items()})
             # Delete Content-Type to let flask set the good multipart
             del client_headers["Content-Type"]
             response = request_method(_url, headers=client_headers, files=files, timeout=10)
     else:
+        # Set data
+        client_data = request.form.to_dict(flat=False)
         response = request_method(_url, headers=client_headers, data=client_data, timeout=10)
 
     # Make the response with content and header for the file type
