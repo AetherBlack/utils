@@ -30,9 +30,15 @@ class AsmInstruction:
         
         # Print page content
         for tag in tags[index:]:
+            # Get string without tags
             value = "".join(tag.strings)
+
+            # If comments stop
             if value == "Comments": break
+
+            # Print value
             print(value)
+            # If it's a title, print a line to split with the text
             if "h1" in str(tag):
                 print("".ljust(len(value), "-"))
     
