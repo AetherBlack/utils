@@ -88,7 +88,7 @@ if __name__ == "__main__":
 
     #Convert result into html page
     #Headers
-    html_page = """<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@100;900&display=swap" rel="stylesheet"> 
+    html_page = """<!DOCTYPE html><link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@100;900&display=swap" rel="stylesheet"> 
                     <style>
                         table {
                             border-collapse: collapse;
@@ -113,10 +113,10 @@ if __name__ == "__main__":
                             background-color: white;
                         }
                         .rouge {
-                            background-color: red;
+                            background-color: #ff402e;
                         }
                         .vert {
-                            background-color: green;
+                            background-color: #0aa836;
                         }
                     </style>
                     <script>
