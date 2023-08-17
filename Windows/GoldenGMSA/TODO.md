@@ -1,0 +1,4 @@
+- [ ] Logger everywhere instead of print
+- [ ] typing for each function
+- [ ] Add typing to return list of his own attributes
+- [ ] Check the return of gmsainfo for ManagedPassword
