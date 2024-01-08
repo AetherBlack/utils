@@ -37,16 +37,4 @@ class KRBLdapShell:
         self.ldapshell = LdapShell(self.fakeTcpClient, self.domainDumper, self.ldap.Authentication())
 
     def run(self):
-        cmd = ""
-        
-        while cmd != "exit":
-            cmd = input("# ")
-            try:
-                func, line = cmd.split(" ", 1)
-            except ValueError:
-                func, line = cmd, ""
-
-            if f"do_{func}" in dir(self.ldapshell):
-                func = getattr(self.ldapshell, f"do_{func}")(line)
-            else:
-                print(f"Command '{cmd}' not found!")
+        self.ldapshell.cmdloop()
